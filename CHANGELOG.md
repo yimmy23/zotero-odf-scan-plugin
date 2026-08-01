@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [3.2.2] - 2026-08-01
+
+### Fixed
+- Fix pandoc curly syntax for locators
+
 ## [3.2.1] - 2026-05-27
 
 ### Fixed

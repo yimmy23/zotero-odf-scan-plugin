@@ -293,8 +293,34 @@ var CitationUtils = {
     },
 
     /**
+     * Locator prefix patterns shared by parsePandocLocator and the
+     * curly-brace forced-locator handling in parseBracedLocator.
+     */
+    pandocLocatorPrefixes: [
+        { pattern: /^pp?\.\s*|^pages?\s*/i,                          label: 'page',      display: 'p.' },
+        { pattern: /^ch\.\s*|^chaps?\.\s*|^chapters?\s*/i,           label: 'chapter',   display: 'ch.' },
+        { pattern: /^secs?\.\s*|^sections?\s*/i,                      label: 'section',   display: 'sec.' },
+        { pattern: /^vols?\.\s*|^volumes?\s*/i,                       label: 'volume',    display: 'vol.' },
+        { pattern: /^nos?\.\s*|^numbers?\s*/i,                        label: 'number',    display: 'no.' },
+        { pattern: /^paras?\.\s*|^paragraphs?\s*/i,                   label: 'paragraph', display: 'para.' },
+        { pattern: /^figs?\.\s*|^figures?\s*/i,                       label: 'figure',    display: 'fig.' },
+        { pattern: /^ll?\.\s*/i,                                      label: 'line',      display: 'l.' },
+        { pattern: /^nn?\.\s*|^notes?\s*/i,                           label: 'note',      display: 'n.' },
+        { pattern: /^arts?\.\s*|^articles?\s*/i,                      label: 'article',   display: 'art.' },
+    ],
+
+    /**
      * Parse a pandoc citation group (the text inside [...])
      * Returns array of { citekey, prefix, locator, label, suffix, suppressAuthor }
+     *
+     * Supports pandoc's curly-brace locator syntax (see
+     * https://pandoc.org/demo/example33/8.20-citation-syntax.html):
+     *   @key{loc}      — force "loc" to be treated as the locator, even if it
+     *                     doesn't match a recognized prefix (e.g. "ii, A, D-Z")
+     *   @key{}         — suppress locator parsing entirely; everything after
+     *                     the (optional) following comma is suffix, verbatim
+     *   @key, {loc}    — same forcing, applied after the comma so a locator
+     *                     containing commas/semicolons isn't split apart
      */
     parsePandocCitationGroup(text) {
         const entries = [];
@@ -319,12 +345,24 @@ var CitationUtils = {
             let label = 'page';
             let suffix = '';
 
-            if (afterKey.startsWith(',')) {
+            if (afterKey.startsWith('{')) {
+                const braced = CitationUtils.parseBracedLocator(afterKey);
+                locator = braced.locator;
+                label = braced.label;
+                suffix = braced.suffix;
+            } else if (afterKey.startsWith(',')) {
                 const afterComma = afterKey.substring(1).trim();
-                const locatorInfo = CitationUtils.parsePandocLocator(afterComma);
-                locator = locatorInfo.locator;
-                label = locatorInfo.label;
-                suffix = locatorInfo.suffix;
+                if (afterComma.startsWith('{')) {
+                    const braced = CitationUtils.parseBracedLocator(afterComma);
+                    locator = braced.locator;
+                    label = braced.label;
+                    suffix = braced.suffix;
+                } else {
+                    const locatorInfo = CitationUtils.parsePandocLocator(afterComma);
+                    locator = locatorInfo.locator;
+                    label = locatorInfo.label;
+                    suffix = locatorInfo.suffix;
+                }
             } else if (afterKey) {
                 suffix = afterKey;
             }
@@ -336,26 +374,61 @@ var CitationUtils = {
     },
 
     /**
+     * Parse pandoc's curly-brace forced-locator syntax. `text` must start
+     * with '{'. Handles both the empty-braces "suppress" form (@key{}) and
+     * the non-empty "force" form (@key{loc} or the post-comma {loc} form).
+     * Returns { locator, label, suffix }.
+     */
+    parseBracedLocator(text) {
+        let depth = 0;
+        let closeIdx = -1;
+        for (let i = 0; i < text.length; i++) {
+            if (text[i] === '{') depth++;
+            else if (text[i] === '}') {
+                depth--;
+                if (depth === 0) { closeIdx = i; break; }
+            }
+        }
+
+        if (closeIdx === -1) {
+            // Unbalanced braces — fall back to treating the whole thing as suffix
+            return { locator: '', label: 'page', suffix: text.trim() };
+        }
+
+        const bracesContent = text.substring(1, closeIdx).trim();
+        let remainder = text.substring(closeIdx + 1).trim();
+        if (remainder.startsWith(',')) remainder = remainder.substring(1).trim();
+
+        if (!bracesContent) {
+            // {} — suppress locator parsing; remainder is suffix, verbatim
+            return { locator: '', label: 'page', suffix: remainder };
+        }
+
+        // Non-empty braces — force this text to be treated as a locator,
+        // still detecting a recognized label prefix (e.g. "pp.") if present.
+        for (const lp of CitationUtils.pandocLocatorPrefixes) {
+            const m = bracesContent.match(lp.pattern);
+            if (m) {
+                const rest = bracesContent.substring(m[0].length).trim();
+                return {
+                    locator: rest ? lp.display + ' ' + rest : lp.display,
+                    label: lp.label,
+                    suffix: remainder
+                };
+            }
+        }
+
+        return { locator: bracesContent, label: 'page', suffix: remainder };
+    },
+
+    /**
      * Parse a pandoc locator string (text after citekey comma).
      * Recognizes: p., pp., ch., chap., chapter, sec., vol., etc.
      * Returns { locator, label, suffix } where label is the CSL term
      * (e.g. "chapter") and locator is the display string (e.g. "ch. 3").
      */
     parsePandocLocator(text) {
-        const locatorPrefixes = [
-            { pattern: /^pp?\.\s*|^pages?\s*/i,                          label: 'page',      display: 'p.' },
-            { pattern: /^ch\.\s*|^chaps?\.\s*|^chapters?\s*/i,           label: 'chapter',   display: 'ch.' },
-            { pattern: /^secs?\.\s*|^sections?\s*/i,                      label: 'section',   display: 'sec.' },
-            { pattern: /^vols?\.\s*|^volumes?\s*/i,                       label: 'volume',    display: 'vol.' },
-            { pattern: /^nos?\.\s*|^numbers?\s*/i,                        label: 'number',    display: 'no.' },
-            { pattern: /^paras?\.\s*|^paragraphs?\s*/i,                   label: 'paragraph', display: 'para.' },
-            { pattern: /^figs?\.\s*|^figures?\s*/i,                       label: 'figure',    display: 'fig.' },
-            { pattern: /^ll?\.\s*/i,                                      label: 'line',      display: 'l.' },
-            { pattern: /^nn?\.\s*|^notes?\s*/i,                           label: 'note',      display: 'n.' },
-            { pattern: /^arts?\.\s*|^articles?\s*/i,                      label: 'article',   display: 'art.' },
-        ];
-
-        for (const lp of locatorPrefixes) {
+        for (const lp of CitationUtils.pandocLocatorPrefixes) {
             const m = text.match(lp.pattern);
             if (m) {
                 const rest = text.substring(m[0].length);

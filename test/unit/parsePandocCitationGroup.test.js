@@ -88,4 +88,41 @@ describe('parsePandocCitationGroup', () => {
         assert.equal(entries[0].locator, 'ch. 3');
         assert.equal(entries[0].label, 'chapter');
     });
+
+    // Pandoc's curly-brace forced-locator syntax:
+    // https://pandoc.org/demo/example33/8.20-citation-syntax.html
+
+    it('"@smith{ii, A, D-Z}, with a suffix" → braced text forced as locator, unrecognized prefix defaults to "page"', () => {
+        const entries = DOCXScan.parsePandocCitationGroup('@smith{ii, A, D-Z}, with a suffix');
+        assert.equal(entries.length, 1);
+        assert.equal(entries[0].citekey, 'smith');
+        assert.equal(entries[0].locator, 'ii, A, D-Z');
+        assert.equal(entries[0].label, 'page');
+        assert.equal(entries[0].suffix, 'with a suffix');
+    });
+
+    it('"@smith, {pp. iv, vi-xi, (xv)-(xvii)} with suffix here" → post-comma braces protect internal commas, recognized "pp." prefix still detected', () => {
+        const entries = DOCXScan.parsePandocCitationGroup('@smith, {pp. iv, vi-xi, (xv)-(xvii)} with suffix here');
+        assert.equal(entries.length, 1);
+        assert.equal(entries[0].citekey, 'smith');
+        assert.equal(entries[0].locator, 'p. iv, vi-xi, (xv)-(xvii)');
+        assert.equal(entries[0].label, 'page');
+        assert.equal(entries[0].suffix, 'with suffix here');
+    });
+
+    it('"@smith{}, 99 years later" → empty braces suppress locator parsing, remainder is suffix verbatim', () => {
+        const entries = DOCXScan.parsePandocCitationGroup('@smith{}, 99 years later');
+        assert.equal(entries.length, 1);
+        assert.equal(entries[0].citekey, 'smith');
+        assert.equal(entries[0].locator, '');
+        assert.equal(entries[0].suffix, '99 years later');
+    });
+
+    it('"@smith{ch. 3}" → braced text matching a recognized prefix is still labeled "chapter"', () => {
+        const entries = DOCXScan.parsePandocCitationGroup('@smith{ch. 3}');
+        assert.equal(entries.length, 1);
+        assert.equal(entries[0].locator, 'ch. 3');
+        assert.equal(entries[0].label, 'chapter');
+        assert.equal(entries[0].suffix, '');
+    });
 });
