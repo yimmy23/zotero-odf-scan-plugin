@@ -3,9 +3,9 @@
     "rtf-odf-scan-for-zotero@mystery-lab.com": {
       "updates": [
         {
-          "version": "3.2.1",
-          "update_link": "https://github.com/Juris-M/zotero-odf-scan-plugin/releases/download/v3.2.1/zotero-odf-scan-v3.2.1.xpi",
-          "update_hash": "sha256:f5c58e6e8303932b961503517d9dd0d374b56e2019e78fdc7b98b34eca1cde12",
+          "version": "3.2.2",
+          "update_link": "https://github.com/Juris-M/zotero-odf-scan-plugin/releases/download/v3.2.2/zotero-odf-scan-v3.2.2.xpi",
+          "update_hash": "sha256:22527a601fda07b8055b5bc9d4e05764578e51e07b95e21523f41ab0cace0e46",
           "applications": {
             "zotero": {
               "strict_min_version": "7.0",
